@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Orbit.io Multiplayer</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>body { margin: 0; overflow: hidden; background: #f0f0f0; }</style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+<script>
+    const socket = io();
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let players = {};
+    let myId = null;
+    let myPos = { x: 1500, y: 1500 };
+    let firedOrbs = [];
+
+    socket.on('connect', () => { myId = socket.id; });
+
+    // 서버에서 전체 플레이어 정보 업데이트
+    socket.on('updatePlayers', (serverPlayers) => {
+        players = serverPlayers;
+    });
+
+    // 다른 유저가 쏜 위성 정보 수신
+    socket.on('enemyShoot', (data) => {
+        if(data.id !== myId) {
+            firedOrbs.push(data);
+        }
+    });
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        if (!players[myId]) return requestAnimationFrame(draw);
+
+        // 카메라 이동 (나를 중앙으로)
+        ctx.save();
+        ctx.translate(canvas.width/2 - players[myId].x, canvas.height/2 - players[myId].y);
+
+        // 1. 모든 플레이어 그리기
+        for (let id in players) {
+            const p = players[id];
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 25, 0, Math.PI*2);
+            ctx.fill();
+
+            // 위성 (내 위성만 각도 계산해서 그림)
+            if (id === myId) {
+                for(let i=0; i<p.orbitals; i++) {
+                    let angle = (Date.now()/1000) + (i * Math.PI*2/p.orbitals);
+                    ctx.fillStyle = "#2ecc71";
+                    ctx.beginPath();
+                    ctx.arc(p.x + 60*Math.cos(angle), p.y + 60*Math.sin(angle), 8, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // 2. 발사된 위성들 업데이트 및 그리기
+        firedOrbs.forEach((orb, i) => {
+            orb.x += orb.vx;
+            orb.y += orb.vy;
+            ctx.fillStyle = "#f39c12";
+            ctx.beginPath(); ctx.arc(orb.x, orb.y, 8, 0, Math.PI*2); ctx.fill();
+        });
+
+        ctx.restore();
+
+        // 내 이동 정보를 서버로 전송
+        // (간단하게 마우스 방향으로 자동 이동 로직 추가 가능)
+        
+        requestAnimationFrame(draw);
+    }
+
+    // 발사 이벤트
+    window.onmousedown = (e) => {
+        const angle = Math.atan2(e.clientY - canvas.height/2, e.clientX - canvas.width/2);
+        const data = {
+            x: players[myId].x, y: players[myId].y,
+            vx: Math.cos(angle)*15, vy: Math.sin(angle)*15
+        };
+        socket.emit('shoot', data);
+    };
+
+    draw();
+</script>
+</body>
+</html>
