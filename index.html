@@ -1,94 +1,136 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-    <title>Orbit.io Multiplayer</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <style>body { margin: 0; overflow: hidden; background: #f0f0f0; }</style>
+    <meta charset="UTF-8">
+    <title>Orbit.io - Final Build</title>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; overflow: hidden; background: #f0f0f0; font-family: 'Jua', sans-serif; user-select: none; }
+        #start-screen { position: fixed; inset: 0; background: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        input { padding: 15px; font-size: 20px; border: 4px solid #333; border-radius: 12px; width: 300px; margin-bottom: 15px; text-align: center; font-family: 'Jua'; outline: none; }
+        button { padding: 12px 80px; font-size: 24px; background: #333; color: #fff; border: none; border-radius: 12px; cursor: pointer; font-family: 'Jua'; transition: 0.2s; }
+        button:hover { background: #ff4757; transform: scale(1.05); }
+        #leaderboard { position: fixed; top: 20px; right: 20px; background: rgba(255,255,255,0.95); padding: 15px; border: 3px solid #333; border-radius: 15px; width: 200px; z-index: 10; box-shadow: 5px 5px 0px rgba(0,0,0,0.1); }
+        .entry { display: flex; justify-content: space-between; font-size: 18px; margin-bottom: 5px; }
+    </style>
 </head>
 <body>
+    <div id="start-screen">
+        <h1>ORBIT.IO</h1>
+        <input type="text" id="nickInput" placeholder="닉네임 입력..." maxlength="10">
+        <button id="startBtn">전투 시작</button>
+    </div>
+    <div id="leaderboard">
+        <h4 style="margin:0 0 10px 0; text-align:center; border-bottom:3px solid #333; font-size:24px;">순위표</h4>
+        <div id="leaderList"></div>
+    </div>
     <canvas id="gameCanvas"></canvas>
-<script>
-    const socket = io();
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
 
-    let players = {};
-    let myId = null;
-    let myPos = { x: 1500, y: 1500 };
-    let firedOrbs = [];
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let players = {}, foods = [], firedOrbs = [];
+        let myId = null, isStarted = false, camX = 1500, camY = 1500;
+        const WORLD_SIZE = 3000, mouse = { x: 0, y: 0 };
 
-    socket.on('connect', () => { myId = socket.id; });
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
-    // 서버에서 전체 플레이어 정보 업데이트
-    socket.on('updatePlayers', (serverPlayers) => {
-        players = serverPlayers;
-    });
+        document.getElementById('startBtn').onclick = () => {
+            socket.emit('join', document.getElementById('nickInput').value.trim() || "익명");
+            document.getElementById('start-screen').style.display = 'none';
+            isStarted = true;
+        };
 
-    // 다른 유저가 쏜 위성 정보 수신
-    socket.on('enemyShoot', (data) => {
-        if(data.id !== myId) {
-            firedOrbs.push(data);
-        }
-    });
-
-    function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        if (!players[myId]) return requestAnimationFrame(draw);
-
-        // 카메라 이동 (나를 중앙으로)
-        ctx.save();
-        ctx.translate(canvas.width/2 - players[myId].x, canvas.height/2 - players[myId].y);
-
-        // 1. 모든 플레이어 그리기
-        for (let id in players) {
-            const p = players[id];
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 25, 0, Math.PI*2);
-            ctx.fill();
-
-            // 위성 (내 위성만 각도 계산해서 그림)
-            if (id === myId) {
-                for(let i=0; i<p.orbitals; i++) {
-                    let angle = (Date.now()/1000) + (i * Math.PI*2/p.orbitals);
-                    ctx.fillStyle = "#2ecc71";
-                    ctx.beginPath();
-                    ctx.arc(p.x + 60*Math.cos(angle), p.y + 60*Math.sin(angle), 8, 0, Math.PI*2);
-                    ctx.fill();
-                }
-            }
-        }
-
-        // 2. 발사된 위성들 업데이트 및 그리기
-        firedOrbs.forEach((orb, i) => {
-            orb.x += orb.vx;
-            orb.y += orb.vy;
-            ctx.fillStyle = "#f39c12";
-            ctx.beginPath(); ctx.arc(orb.x, orb.y, 8, 0, Math.PI*2); ctx.fill();
+        socket.on('connect', () => { myId = socket.id; });
+        socket.on('initFood', d => foods = d);
+        socket.on('updateFood', d => foods = d);
+        socket.on('updatePlayers', d => players = d);
+        socket.on('enemyShoot', d => { d.trail = []; firedOrbs.push(d); });
+        socket.on('updateLeaderboard', list => {
+            document.getElementById('leaderList').innerHTML = list.map((p, i) => 
+                `<div class="entry"><span>${i+1}. ${p.nickname}</span><b>${p.score}</b></div>`).join('');
         });
 
-        ctx.restore();
-
-        // 내 이동 정보를 서버로 전송
-        // (간단하게 마우스 방향으로 자동 이동 로직 추가 가능)
-        
-        requestAnimationFrame(draw);
-    }
-
-    // 발사 이벤트
-    window.onmousedown = (e) => {
-        const angle = Math.atan2(e.clientY - canvas.height/2, e.clientX - canvas.width/2);
-        const data = {
-            x: players[myId].x, y: players[myId].y,
-            vx: Math.cos(angle)*15, vy: Math.sin(angle)*15
+        window.onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; };
+        window.onmousedown = () => {
+            const me = players[myId];
+            if (!isStarted || !me || me.score <= 1) return;
+            const angle = Math.atan2(mouse.y - canvas.height/2, mouse.x - canvas.width/2);
+            socket.emit('shoot', { x: me.x, y: me.y, vx: Math.cos(angle)*16, vy: Math.sin(angle)*16 });
         };
-        socket.emit('shoot', data);
-    };
 
-    draw();
-</script>
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (isStarted && players[myId]) {
+                const me = players[myId];
+                const dx = mouse.x - canvas.width/2, dy = mouse.y - canvas.height/2, dist = Math.hypot(dx, dy);
+                if (dist > 5) {
+                    me.x = Math.max(0, Math.min(WORLD_SIZE, me.x + (dx/dist)*5.5));
+                    me.y = Math.max(0, Math.min(WORLD_SIZE, me.y + (dy/dist)*5.5));
+                    socket.emit('move', { x: me.x, y: me.y });
+                }
+                camX += (me.x - camX)*0.1; camY += (me.y - camY)*0.1;
+            }
+
+            ctx.save();
+            ctx.translate(canvas.width/2 - camX, canvas.height/2 - camY);
+
+            // 격자
+            ctx.strokeStyle = "#ddd"; ctx.lineWidth = 2; ctx.beginPath();
+            for (let x=0; x<=WORLD_SIZE; x+=60) { ctx.moveTo(x,0); ctx.lineTo(x,WORLD_SIZE); }
+            for (let y=0; y<=WORLD_SIZE; y+=60) { ctx.moveTo(0,y); ctx.lineTo(WORLD_SIZE,y); }
+            ctx.stroke();
+
+            // 먹이
+            foods.forEach(f => {
+                ctx.fillStyle = f.color; ctx.strokeStyle = "#333"; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(f.x, f.y, f.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            });
+
+            // 탄환
+            firedOrbs.forEach((o, i) => {
+                o.x += o.vx; o.y += o.vy;
+                o.trail.push({x: o.x, y: o.y}); if(o.trail.length > 10) o.trail.shift();
+                ctx.beginPath(); ctx.strokeStyle = o.color; ctx.lineWidth = 5;
+                o.trail.forEach((p, idx) => { if(idx==0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+                ctx.stroke();
+                ctx.fillStyle = o.color; ctx.strokeStyle = "#333"; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(o.x, o.y, 11, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                
+                if (isStarted && myId && o.ownerId === myId) {
+                    for (let id in players) {
+                        if (id !== myId && Math.hypot(o.x - players[id].x, o.y - players[id].y) < players[id].radius + 8) {
+                            socket.emit('hit', id); firedOrbs.splice(i, 1);
+                        }
+                    }
+                }
+                if(o.x<0 || o.x>WORLD_SIZE || o.y<0 || o.y>WORLD_SIZE) firedOrbs.splice(i, 1);
+            });
+
+            // 플레이어 (서버 데이터 p.radius, p.score로 직접 그림)
+            for (let id in players) {
+                const p = players[id];
+                ctx.fillStyle = p.color; ctx.strokeStyle = "#333"; ctx.lineWidth = 5;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                
+                ctx.fillStyle = "#333"; ctx.textAlign = "center";
+                ctx.font = "bold 20px Jua"; ctx.fillText(p.nickname, p.x, p.y - (p.radius + 25));
+                ctx.font = "18px Jua"; ctx.fillText(`${p.score}`, p.x, p.y + (p.radius + 25));
+
+                for(let j=0; j<p.score; j++) {
+                    const angle = (Date.now()/600) + (j*Math.PI*2/p.score);
+                    const d = p.radius + 38;
+                    ctx.beginPath(); ctx.arc(p.x + d*Math.cos(angle), p.y + d*Math.sin(angle), 7, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                }
+            }
+            ctx.restore();
+            requestAnimationFrame(animate);
+        }
+        animate();
+        window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+    </script>
 </body>
 </html>
