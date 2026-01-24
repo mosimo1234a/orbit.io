@@ -1,116 +1,96 @@
 const express = require('express');
-const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
 
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+// 별도의 public 폴더 없이 현재 폴더(Orbit)에서 파일을 찾도록 설정
 app.use(express.static(__dirname));
 
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// --- 게임 로직 (채팅 포함) ---
+const MAP_SIZE = 3000;
 let players = {};
 let foods = [];
-const WORLD_SIZE = 3000;
-const MAX_FOODS = 150;
 
-// 먹이 생성 (파스텔톤)
-function spawnFood() {
+function spawnFood(count = 1) {
     const colors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
-    while (foods.length < MAX_FOODS) {
+    for (let i = 0; i < count; i++) {
         foods.push({
             id: Math.random().toString(36).substr(2, 9),
-            x: Math.random() * WORLD_SIZE,
-            y: Math.random() * WORLD_SIZE,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            radius: 8
+            x: Math.random() * MAP_SIZE,
+            y: Math.random() * MAP_SIZE,
+            radius: 5,
+            color: colors[Math.floor(Math.random() * colors.length)]
         });
     }
 }
-spawnFood();
+spawnFood(200);
 
 io.on('connection', (socket) => {
-    socket.on('join', (nick) => {
-        const pastelColors = ['#FFB3BA', '#BAFFC9', '#BAE1FF', '#FFFFBA', '#FFDFBA', '#E0BBE4'];
+    socket.on('join', (nickname) => {
+        const colors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
         players[socket.id] = {
             id: socket.id,
-            x: Math.random() * WORLD_SIZE,
-            y: Math.random() * WORLD_SIZE,
-            nickname: nick.substring(0, 10) || "익명",
-            score: 5,
-            radius: 25,
-            color: pastelColors[Math.floor(Math.random() * pastelColors.length)]
+            nickname: nickname || "Guest",
+            x: Math.random() * MAP_SIZE,
+            y: Math.random() * MAP_SIZE,
+            radius: 20,
+            score: 0,
+            color: colors[Math.floor(Math.random() * colors.length)]
         };
         socket.emit('initFood', foods);
     });
 
     socket.on('move', (data) => {
-        if (players[socket.id]) {
-            players[socket.id].x = data.x;
-            players[socket.id].y = data.y;
-            
-            // 먹이 충돌 감지
+        const p = players[socket.id];
+        if (p) {
+            p.x = data.x; p.y = data.y;
             for (let i = foods.length - 1; i >= 0; i--) {
-                let f = foods[i];
-                if (Math.hypot(players[socket.id].x - f.x, players[socket.id].y - f.y) < players[socket.id].radius + f.radius) {
-                    players[socket.id].score += 1;
-                    players[socket.id].radius += 0.5;
+                const f = foods[i];
+                if (Math.hypot(p.x - f.x, p.y - f.y) < p.radius + f.radius) {
                     foods.splice(i, 1);
-                    spawnFood();
+                    p.score += 0.5; 
+                    p.radius += 0.2;
+                    spawnFood(1);
                     io.emit('updateFood', foods);
                 }
             }
         }
     });
 
+    // 채팅 기능 (15개 누적의 핵심!)
+    socket.on('chat', (msg) => {
+        const p = players[socket.id];
+        if (p && msg.trim() !== "") {
+            io.emit('chat', { nick: p.nickname, msg: msg });
+        }
+    });
+
     socket.on('shoot', (data) => {
-        if (players[socket.id] && players[socket.id].score > 2) {
-            players[socket.id].score -= 1;
-            players[socket.id].radius = Math.max(20, players[socket.id].radius - 0.3);
-            io.emit('enemyShoot', { ...data, ownerId: socket.id, color: players[socket.id].color });
-        }
-    });
-
-    socket.on('hit', (targetId) => {
-        const shooter = players[socket.id];
-        const target = players[targetId];
-        if (shooter && target) {
-            target.score = Math.max(0, target.score - 3);
-            target.radius = Math.max(20, target.radius - 1.5);
-            shooter.score += 2;
-            shooter.radius += 1;
-            if (target.score <= 0) {
-                shooter.score += 20;
-                shooter.radius += 10;
-                io.emit('killLog', { killer: shooter.nickname, victim: target.nickname });
-                io.to(targetId).emit('gameOver');
-                delete players[targetId];
-            }
-        }
-    });
-
-    socket.on('sendChat', (msg) => {
-        if (players[socket.id]) {
-            io.emit('receiveChat', { 
-                nick: players[socket.id].nickname, 
-                text: msg.substring(0, 50), 
-                color: players[socket.id].color 
-            });
+        const p = players[socket.id];
+        if (p && p.score >= 1) {
+            p.score -= 1; p.radius -= 0.5;
+            io.emit('enemyShoot', { x: data.x, y: data.y, vx: data.vx, vy: data.vy, color: p.color, ownerId: socket.id });
         }
     });
 
     socket.on('disconnect', () => { delete players[socket.id]; });
 });
 
-// 실시간 순위 및 상태 전송 루프
 setInterval(() => {
-    const sorted = Object.values(players).sort((a,b) => b.score - a.score);
-    const lb = sorted.slice(0, 5).map(p => ({nickname: p.nickname, score: Math.floor(p.score)}));
-    
-    sorted.forEach((p, i) => {
-        io.to(p.id).emit('gameState', { 
-            players, 
-            leaderboard: lb,
-            myRank: i + 1,
-            totalPlayers: sorted.length
-        });
+    const pArr = Object.values(players);
+    const leaderboard = [...pArr].sort((a,b)=>b.score-a.score).slice(0,5).map(p=>({nickname:p.nickname, score:p.score, color:p.color}));
+    pArr.forEach(p => {
+        const myRank = [...pArr].sort((a,b)=>b.score-a.score).findIndex(i=>i.id===p.id)+1;
+        io.to(p.id).emit('gameState', { players, leaderboard, myRank, totalPlayers: pArr.length });
     });
 }, 33);
 
-http.listen(3000, () => console.log('Server Start: 3000'));
+server.listen(3000, () => console.log(`서버 실행 중: http://localhost:3000`));

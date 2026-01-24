@@ -3,29 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Orbit.io - Unlimited Edition</title>
+    <title>Orbit.io - Chat Fixed</title>
     <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; overflow: hidden; background: #f0f0f0; font-family: 'Jua', sans-serif; touch-action: none; }
-        #start-screen { position: fixed; inset: 0; background: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
-        input, button { padding: 12px; font-size: 20px; border: 3px solid #333; border-radius: 8px; font-family: 'Jua'; outline: none; }
-        button { background: #333; color: #fff; cursor: pointer; margin-top: 10px; }
+        :root { --bg-color: #fdfdfd; --border-color: #333; --panel-bg: rgba(255, 255, 255, 0.9); }
+        body { margin: 0; overflow: hidden; background: var(--bg-color); font-family: 'Jua', sans-serif; touch-action: none; }
         
         #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
-        #leaderboard { position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.9); border: 3px solid #333; padding: 10px; border-radius: 10px; width: 170px; }
-        #my-rank { position: absolute; bottom: 20px; left: 20px; background: #333; color: #fff; padding: 10px 20px; border-radius: 30px; font-size: 18px; pointer-events: auto; }
         
-        #chat-box { position: absolute; bottom: 20px; right: 20px; width: 260px; pointer-events: auto; }
-        #chat-list { height: 130px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
-        .msg { background: #fff; border: 2px solid #333; padding: 4px 10px; border-radius: 8px; margin-top: 4px; font-size: 14px; box-shadow: 2px 2px 0px #333; }
-        #chatInput { width: 100%; box-sizing: border-box; margin-top: 8px; border: 3px solid #333; padding: 8px; border-radius: 8px; }
+        /* 채팅창 레이아웃: 15개 누적용 */
+        #chat-box { position: absolute; top: 10px; left: 10px; width: 220px; pointer-events: auto; }
+        #chat-list { 
+            height: 200px; 
+            overflow-y: hidden; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: flex-end; 
+            margin-bottom: 5px; 
+        }
+        .msg { 
+            background: var(--panel-bg); border: 2.5px solid var(--border-color); 
+            padding: 5px 12px; border-radius: 12px; margin-top: 3px; 
+            font-size: 13px; color: #333; box-shadow: 2px 2px 0 rgba(0,0,0,0.05);
+            animation: pop 0.2s ease-out;
+        }
+        @keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        
+        #chatInput { 
+            width: 100%; border: 3px solid var(--border-color); padding: 10px; 
+            border-radius: 12px; font-size: 14px; box-sizing: border-box; background: #fff;
+            outline: none; font-family: 'Jua';
+        }
+
+        #leaderboard { position: absolute; top: 10px; right: 10px; background: var(--panel-bg); border: 3px solid var(--border-color); padding: 10px; border-radius: 12px; width: 150px; font-size: 13px; }
+        #my-rank { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); background: var(--border-color); color: #fff; padding: 6px 18px; border-radius: 20px; font-size: 14px; }
+        #mobile-shoot { position: fixed; bottom: 20px; right: 20px; width: 80px; height: 80px; background: #ff8e8e; border: 4px solid var(--border-color); border-radius: 50%; color: white; font-size: 18px; z-index: 20; display: none; justify-content: center; align-items: center; box-shadow: 0 5px 0 var(--border-color); }
+
+        #start-screen { position: fixed; inset: 0; background: var(--bg-color); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        input, button { padding: 12px 20px; font-size: 18px; border: 3px solid var(--border-color); border-radius: 15px; font-family: 'Jua'; margin-bottom: 10px; }
+        button { background: #ffcc00; cursor: pointer; border-bottom-width: 6px; }
+
+        @media (min-width: 768px) {
+            #chat-box { width: 300px; top: auto; bottom: 20px; left: auto; right: 20px; }
+            #my-rank { bottom: 25px; left: 25px; transform: none; }
+        }
     </style>
 </head>
 <body>
     <div id="start-screen">
-        <h1 style="font-size: 60px; color: #333;">ORBIT.IO</h1>
-        <input type="text" id="nickInput" placeholder="닉네임 입력" maxlength="10">
-        <button id="startBtn">전투 시작</button>
+        <h1>ORBIT.IO</h1>
+        <input type="text" id="nickInput" placeholder="NICKNAME" maxlength="10">
+        <button id="startBtn">START</button>
     </div>
 
     <div id="ui">
@@ -33,9 +61,11 @@
         <div id="my-rank">Rank: - / Score: 0</div>
         <div id="chat-box" style="display:none;">
             <div id="chat-list"></div>
-            <input type="text" id="chatInput" placeholder="채팅 입력 (Enter)">
+            <input type="text" id="chatInput" placeholder="메시지 입력 후 엔터">
         </div>
     </div>
+    
+    <div id="mobile-shoot">FIRE!</div>
     <canvas id="gameCanvas"></canvas>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -43,6 +73,7 @@
         const socket = io();
         const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
         const chatInput = document.getElementById('chatInput'), chatList = document.getElementById('chat-list');
+        const mobileShoot = document.getElementById('mobile-shoot');
         
         let players = {}, targetPlayers = {}, foods = [], firedOrbs = [], myId = null, isStarted = false;
         let camX = 1500, camY = 1500, inX = 0, inY = 0, zoom = 1.0;
@@ -50,49 +81,48 @@
         canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
         document.getElementById('startBtn').onclick = () => {
-            const nick = document.getElementById('nickInput').value.trim() || "익명";
-            socket.emit('join', nick);
+            socket.emit('join', document.getElementById('nickInput').value.trim() || "Guest");
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('chat-box').style.display = 'block';
+            if(window.innerWidth < 768) mobileShoot.style.display = 'flex';
             isStarted = true;
         };
 
-        chatInput.onkeydown = (e) => {
+        // 채팅 기능 보강 (엔터키 이벤트)
+        chatInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                if (chatInput.value.trim()) socket.emit('sendChat', chatInput.value);
-                chatInput.value = ''; chatInput.blur();
-            }
-            e.stopPropagation();
-        };
-
-        socket.on('receiveChat', d => {
-            const m = document.createElement('div'); m.className = 'msg';
-            m.innerHTML = `<b style="color:${d.color}">${d.nick}:</b> ${d.text}`;
-            chatList.appendChild(m);
-            if(chatList.children.length > 5) chatList.removeChild(chatList.firstChild);
-            setTimeout(() => m.remove(), 6000);
-        });
-
-        socket.on('gameState', d => {
-            targetPlayers = d.players;
-            if (myId && targetPlayers[myId]) {
-                if (players[myId]) {
-                    players[myId].score = targetPlayers[myId].score;
-                    players[myId].radius = targetPlayers[myId].radius;
+                const msg = chatInput.value.trim();
+                if (msg) {
+                    socket.emit('chat', msg); // 서버로 전송
+                    chatInput.value = ''; // 입력창 비우기
                 }
-                document.getElementById('my-rank').innerText = `🏆 Rank: ${d.myRank}/${d.totalPlayers} | Score: ${Math.floor(targetPlayers[myId].score)}`;
+                chatInput.blur(); // 포커스 해제
             }
-            document.getElementById('leaderList').innerHTML = '<b style="font-size:18px">TOP 5</b>' + d.leaderboard.map((p,i)=>`<div style="font-size:14px; margin-top:3px;">${i+1}. ${p.nickname} (${p.score})</div>`).join('');
         });
 
-        socket.on('initFood', d => foods = d);
-        socket.on('updateFood', d => foods = d);
-        socket.on('enemyShoot', d => firedOrbs.push(d));
-        socket.on('connect', () => myId = socket.id);
-        socket.on('gameOver', () => { alert("게임 오버!"); location.reload(); });
+        // 서버로부터 채팅 받기
+        socket.on('chat', (data) => {
+            const m = document.createElement('div');
+            m.className = 'msg';
+            m.innerHTML = `<b>${data.nick}:</b> ${data.msg}`;
+            chatList.appendChild(m);
+            
+            // 15개 누적 유지
+            while (chatList.children.length > 15) {
+                chatList.removeChild(chatList.firstChild);
+            }
+        });
 
-        window.onmousemove = e => { if(document.activeElement !== chatInput) { inX = e.clientX - canvas.width/2; inY = e.clientY - canvas.height/2; }};
-        window.onmousedown = e => { if(e.target !== chatInput) shoot(); };
+        function handleInput(x, y) {
+            if(document.activeElement === chatInput) return;
+            inX = x - canvas.width/2; inY = y - canvas.height/2;
+        }
+
+        window.addEventListener('mousemove', e => handleInput(e.clientX, e.clientY));
+        window.addEventListener('touchmove', e => {
+            if (isStarted && document.activeElement !== chatInput) e.preventDefault();
+            handleInput(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive: false});
 
         function shoot() {
             if(!isStarted || !players[myId]) return;
@@ -100,8 +130,39 @@
             socket.emit('shoot', { x: players[myId].x, y: players[myId].y, vx: Math.cos(a)*15, vy: Math.sin(a)*15 });
         }
 
+        window.onmousedown = e => { if(isStarted && e.target === canvas) shoot(); };
+        mobileShoot.ontouchstart = e => { e.preventDefault(); shoot(); };
+
+        socket.on('gameState', d => {
+            targetPlayers = d.players;
+            if (myId && targetPlayers[myId]) {
+                document.getElementById('my-rank').innerText = `🏆 Rank: ${d.myRank}/${d.totalPlayers} | Score: ${Math.floor(targetPlayers[myId].score)}`;
+            }
+            document.getElementById('leaderList').innerHTML = '<b style="border-bottom:2px solid #333; display:block; margin-bottom:5px;">RANKING</b>' + 
+                d.leaderboard.map((p,i)=>`<div style="color:${p.color}">${i+1}. ${p.nickname} (${Math.floor(p.score)})</div>`).join('');
+        });
+
+        socket.on('initFood', d => foods = d);
+        socket.on('updateFood', d => foods = d);
+        socket.on('enemyShoot', d => firedOrbs.push(d));
+        socket.on('connect', () => myId = socket.id);
+
+        function drawCircle(x, y, r, color, sW = 3) {
+            ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#333'; ctx.lineWidth = sW; ctx.stroke();
+        }
+
         function loop() {
-            ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.fillStyle = '#fdfdfd'; ctx.fillRect(0,0,canvas.width,canvas.height);
+            
+            // 배경 그리드
+            ctx.strokeStyle = "#eee"; ctx.lineWidth = 1; ctx.beginPath();
+            let gS = 50 * zoom;
+            let oX = (canvas.width/2 - camX*zoom) % gS;
+            let oY = (canvas.height/2 - camY*zoom) % gS;
+            for(let x=oX; x<canvas.width; x+=gS) { ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); }
+            for(let y=oY; y<canvas.height; y+=gS) { ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); }
+            ctx.stroke();
 
             if (isStarted && targetPlayers[myId]) {
                 if (!players[myId]) players[myId] = {...targetPlayers[myId]};
@@ -112,72 +173,40 @@
                     me.y = Math.max(0, Math.min(3000, me.y + (inY/d)*6));
                     socket.emit('move', {x: me.x, y: me.y});
                 }
-                camX += (me.x - camX) * 0.15; camY += (me.y - camY) * 0.15;
+                me.radius = targetPlayers[myId].radius;
+                me.score = targetPlayers[myId].score;
 
-                let targetZoom = 25 / (me.radius * 0.7 + 7);
-                targetZoom = Math.max(0.3, Math.min(1.0, targetZoom));
-                zoom += (targetZoom - zoom) * 0.05;
+                camX += (me.x - camX) * 0.15; camY += (me.y - camY) * 0.15;
+                let tZ = 25 / (me.radius * 0.7 + 7);
+                tZ = Math.max(window.innerWidth < 768 ? 0.45 : 0.3, Math.min(1.0, tZ));
+                zoom += (tZ - zoom) * 0.05;
             }
 
             ctx.save(); 
-            ctx.translate(canvas.width/2, canvas.height/2);
-            ctx.scale(zoom, zoom);
-            ctx.translate(-camX, -camY);
+            ctx.translate(canvas.width/2, canvas.height/2); ctx.scale(zoom, zoom); ctx.translate(-camX, -camY);
             
-            // 격자
-            ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1/zoom; ctx.beginPath();
-            for(let i=0; i<=3000; i+=100) { ctx.moveTo(i,0); ctx.lineTo(i,3000); ctx.moveTo(0,i); ctx.lineTo(3000,i); }
-            ctx.stroke();
+            foods.forEach(f => drawCircle(f.x, f.y, f.radius, f.color, 1.5));
 
-            // 먹이
-            foods.forEach(f => {
-                ctx.fillStyle = f.color; ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.arc(f.x, f.y, f.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-            });
-
-            // 플레이어 및 무제한 위성
             for (let id in targetPlayers) {
-                if (!players[id]) players[id] = {...targetPlayers[id]};
-                const p = players[id]; const target = targetPlayers[id];
-
+                const p = players[id] || targetPlayers[id];
+                p.radius = targetPlayers[id].radius;
+                p.score = targetPlayers[id].score;
                 if (id !== myId) {
-                    p.x += (target.x - p.x) * 0.3; p.y += (target.y - p.y) * 0.3;
-                    p.score = target.score; p.radius = target.radius;
+                    p.x += (targetPlayers[id].x - p.x) * 0.3;
+                    p.y += (targetPlayers[id].y - p.y) * 0.3;
                 }
-
-                // 무제한 위성 렌더링
-                const satCount = Math.floor(p.score); 
-                const time = Date.now() / 800;
-                for(let j=0; j < satCount; j++) {
-                    const angle = time + (j * Math.PI * 2 / satCount);
-                    // 위성이 많아질수록 바깥쪽으로 층을 쌓음
-                    const orbitR = p.radius + 25 + (j * 0.05); 
-                    ctx.fillStyle = p.color; ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
-                    ctx.beginPath(); ctx.arc(p.x + orbitR * Math.cos(angle), p.y + orbitR * Math.sin(angle), 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                
+                const sC = Math.floor(p.score);
+                for(let j=0; j < sC; j++) {
+                    const ang = (Date.now() / 800) + (j * Math.PI * 2 / Math.max(1, sC));
+                    const oR = p.radius + 25 + (j * 0.5);
+                    drawCircle(p.x + oR * Math.cos(ang), p.y + oR * Math.sin(ang), 6, p.color, 2);
                 }
-
-                // 본체
-                ctx.fillStyle = p.color; ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
-                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.font = `bold ${14/zoom}px Jua`;
-                ctx.fillText(p.nickname, p.x, p.y - p.radius - (12/zoom));
+                drawCircle(p.x, p.y, p.radius, p.color, 4);
+                ctx.fillStyle = "#333"; ctx.textAlign = "center"; ctx.font = "bold 16px Jua";
+                ctx.fillText(targetPlayers[id].nickname, p.x, p.y + p.radius + 30);
             }
-
-            // 발사된 탄환
-            firedOrbs.forEach((o, i) => {
-                o.x += o.vx; o.y += o.vy;
-                ctx.fillStyle = o.color; ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.arc(o.x, o.y, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                if (myId && o.ownerId === myId) {
-                    for (let id in targetPlayers) {
-                        if (id !== myId && Math.hypot(o.x - targetPlayers[id].x, o.y - targetPlayers[id].y) < targetPlayers[id].radius + 10) {
-                            socket.emit('hit', id); firedOrbs.splice(i, 1);
-                        }
-                    }
-                }
-                if(o.x<0||o.x>3000||o.y<0||o.y>3000) firedOrbs.splice(i,1);
-            });
-
+            firedOrbs.forEach(o => drawCircle(o.x += o.vx, o.y += o.vy, 10, o.color, 2));
             ctx.restore();
             requestAnimationFrame(loop);
         }
