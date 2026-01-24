@@ -10,98 +10,107 @@ let foods = [];
 const WORLD_SIZE = 3000;
 const MAX_FOODS = 150;
 
+// 먹이 생성 (파스텔톤)
 function spawnFood() {
+    const colors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
     while (foods.length < MAX_FOODS) {
-        const rand = Math.random();
-        let scoreBonus, sizeBonus, color, radius;
-        if (rand < 0.7) { 
-            scoreBonus = 1; sizeBonus = 1.2; color = '#ffdf11'; radius = 8;
-        } else if (rand < 0.9) { 
-            scoreBonus = 3; sizeBonus = 3.5; color = '#3498db'; radius = 13;
-        } else { 
-            scoreBonus = 8; sizeBonus = 8.0; color = '#e74c3c'; radius = 20;
-        }
         foods.push({
             id: Math.random().toString(36).substr(2, 9),
-            x: Math.random() * WORLD_SIZE, y: Math.random() * WORLD_SIZE,
-            color, scoreBonus, sizeBonus, radius
+            x: Math.random() * WORLD_SIZE,
+            y: Math.random() * WORLD_SIZE,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            radius: 8
         });
     }
 }
 spawnFood();
 
-function updateLeaderboard() {
-    const leaderboard = Object.values(players)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
-        .map(p => ({ nickname: p.nickname, score: p.score }));
-    io.emit('updateLeaderboard', leaderboard);
-}
-
 io.on('connection', (socket) => {
-    socket.on('join', (nickname) => {
+    socket.on('join', (nick) => {
+        const pastelColors = ['#FFB3BA', '#BAFFC9', '#BAE1FF', '#FFFFBA', '#FFDFBA', '#E0BBE4'];
         players[socket.id] = {
             id: socket.id,
-            x: Math.random() * (WORLD_SIZE - 200) + 100,
-            y: Math.random() * (WORLD_SIZE - 200) + 100,
-            nickname: nickname.substring(0, 10) || "Player",
-            score: 5, radius: 25,
-            color: `hsl(${Math.random() * 360}, 75%, 55%)`
+            x: Math.random() * WORLD_SIZE,
+            y: Math.random() * WORLD_SIZE,
+            nickname: nick.substring(0, 10) || "익명",
+            score: 5,
+            radius: 25,
+            color: pastelColors[Math.floor(Math.random() * pastelColors.length)]
         };
         socket.emit('initFood', foods);
-        io.emit('updatePlayers', players);
-        updateLeaderboard();
     });
 
     socket.on('move', (data) => {
-        const p = players[socket.id];
-        if (p) {
-            p.x = data.x; p.y = data.y;
-            let eaten = false;
-            foods.forEach((food, index) => {
-                if (Math.hypot(p.x - food.x, p.y - food.y) < p.radius + food.radius) { 
-                    p.score += food.scoreBonus;
-                    p.radius += food.sizeBonus;
-                    foods.splice(index, 1);
-                    eaten = true;
+        if (players[socket.id]) {
+            players[socket.id].x = data.x;
+            players[socket.id].y = data.y;
+            
+            // 먹이 충돌 감지
+            for (let i = foods.length - 1; i >= 0; i--) {
+                let f = foods[i];
+                if (Math.hypot(players[socket.id].x - f.x, players[socket.id].y - f.y) < players[socket.id].radius + f.radius) {
+                    players[socket.id].score += 1;
+                    players[socket.id].radius += 0.5;
+                    foods.splice(i, 1);
+                    spawnFood();
+                    io.emit('updateFood', foods);
                 }
-            });
-            if (eaten) {
-                spawnFood();
-                io.emit('updateFood', foods);
-                io.emit('updatePlayers', players); // 모든 유저에게 즉시 크기/점수 갱신
-                updateLeaderboard();
             }
-            socket.broadcast.emit('updatePlayers', players);
         }
     });
 
     socket.on('shoot', (data) => {
-        const p = players[socket.id];
-        if (p && p.score > 1) {
-            p.score -= 1;
-            p.radius = Math.max(25, p.radius - 0.5);
-            io.emit('enemyShoot', { ...data, ownerId: socket.id, color: p.color });
-            io.emit('updatePlayers', players);
-            updateLeaderboard();
+        if (players[socket.id] && players[socket.id].score > 2) {
+            players[socket.id].score -= 1;
+            players[socket.id].radius = Math.max(20, players[socket.id].radius - 0.3);
+            io.emit('enemyShoot', { ...data, ownerId: socket.id, color: players[socket.id].color });
         }
     });
 
     socket.on('hit', (targetId) => {
-        if (players[targetId] && players[socket.id]) {
-            players[targetId].score = Math.max(1, players[targetId].score - 3);
-            players[targetId].radius = Math.max(25, players[targetId].radius - 4);
-            players[socket.id].score += 5;
-            players[socket.id].radius += 3.5;
-            io.emit('updatePlayers', players);
-            updateLeaderboard();
+        const shooter = players[socket.id];
+        const target = players[targetId];
+        if (shooter && target) {
+            target.score = Math.max(0, target.score - 3);
+            target.radius = Math.max(20, target.radius - 1.5);
+            shooter.score += 2;
+            shooter.radius += 1;
+            if (target.score <= 0) {
+                shooter.score += 20;
+                shooter.radius += 10;
+                io.emit('killLog', { killer: shooter.nickname, victim: target.nickname });
+                io.to(targetId).emit('gameOver');
+                delete players[targetId];
+            }
         }
     });
 
-    socket.on('disconnect', () => {
-        delete players[socket.id];
-        io.emit('updatePlayers', players);
+    socket.on('sendChat', (msg) => {
+        if (players[socket.id]) {
+            io.emit('receiveChat', { 
+                nick: players[socket.id].nickname, 
+                text: msg.substring(0, 50), 
+                color: players[socket.id].color 
+            });
+        }
     });
+
+    socket.on('disconnect', () => { delete players[socket.id]; });
 });
 
-http.listen(3000, () => console.log('Game Server Ready: Port 3000'));
+// 실시간 순위 및 상태 전송 루프
+setInterval(() => {
+    const sorted = Object.values(players).sort((a,b) => b.score - a.score);
+    const lb = sorted.slice(0, 5).map(p => ({nickname: p.nickname, score: Math.floor(p.score)}));
+    
+    sorted.forEach((p, i) => {
+        io.to(p.id).emit('gameState', { 
+            players, 
+            leaderboard: lb,
+            myRank: i + 1,
+            totalPlayers: sorted.length
+        });
+    });
+}, 33);
+
+http.listen(3000, () => console.log('Server Start: 3000'));

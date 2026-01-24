@@ -2,134 +2,186 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Orbit.io - Final Build</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Orbit.io - Unlimited Edition</title>
     <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; overflow: hidden; background: #f0f0f0; font-family: 'Jua', sans-serif; user-select: none; }
+        body { margin: 0; overflow: hidden; background: #f0f0f0; font-family: 'Jua', sans-serif; touch-action: none; }
         #start-screen { position: fixed; inset: 0; background: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
-        input { padding: 15px; font-size: 20px; border: 4px solid #333; border-radius: 12px; width: 300px; margin-bottom: 15px; text-align: center; font-family: 'Jua'; outline: none; }
-        button { padding: 12px 80px; font-size: 24px; background: #333; color: #fff; border: none; border-radius: 12px; cursor: pointer; font-family: 'Jua'; transition: 0.2s; }
-        button:hover { background: #ff4757; transform: scale(1.05); }
-        #leaderboard { position: fixed; top: 20px; right: 20px; background: rgba(255,255,255,0.95); padding: 15px; border: 3px solid #333; border-radius: 15px; width: 200px; z-index: 10; box-shadow: 5px 5px 0px rgba(0,0,0,0.1); }
-        .entry { display: flex; justify-content: space-between; font-size: 18px; margin-bottom: 5px; }
+        input, button { padding: 12px; font-size: 20px; border: 3px solid #333; border-radius: 8px; font-family: 'Jua'; outline: none; }
+        button { background: #333; color: #fff; cursor: pointer; margin-top: 10px; }
+        
+        #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+        #leaderboard { position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.9); border: 3px solid #333; padding: 10px; border-radius: 10px; width: 170px; }
+        #my-rank { position: absolute; bottom: 20px; left: 20px; background: #333; color: #fff; padding: 10px 20px; border-radius: 30px; font-size: 18px; pointer-events: auto; }
+        
+        #chat-box { position: absolute; bottom: 20px; right: 20px; width: 260px; pointer-events: auto; }
+        #chat-list { height: 130px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+        .msg { background: #fff; border: 2px solid #333; padding: 4px 10px; border-radius: 8px; margin-top: 4px; font-size: 14px; box-shadow: 2px 2px 0px #333; }
+        #chatInput { width: 100%; box-sizing: border-box; margin-top: 8px; border: 3px solid #333; padding: 8px; border-radius: 8px; }
     </style>
 </head>
 <body>
     <div id="start-screen">
-        <h1>ORBIT.IO</h1>
-        <input type="text" id="nickInput" placeholder="닉네임 입력..." maxlength="10">
+        <h1 style="font-size: 60px; color: #333;">ORBIT.IO</h1>
+        <input type="text" id="nickInput" placeholder="닉네임 입력" maxlength="10">
         <button id="startBtn">전투 시작</button>
     </div>
-    <div id="leaderboard">
-        <h4 style="margin:0 0 10px 0; text-align:center; border-bottom:3px solid #333; font-size:24px;">순위표</h4>
-        <div id="leaderList"></div>
+
+    <div id="ui">
+        <div id="leaderboard"><div id="leaderList"></div></div>
+        <div id="my-rank">Rank: - / Score: 0</div>
+        <div id="chat-box" style="display:none;">
+            <div id="chat-list"></div>
+            <input type="text" id="chatInput" placeholder="채팅 입력 (Enter)">
+        </div>
     </div>
     <canvas id="gameCanvas"></canvas>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        let players = {}, foods = [], firedOrbs = [];
-        let myId = null, isStarted = false, camX = 1500, camY = 1500;
-        const WORLD_SIZE = 3000, mouse = { x: 0, y: 0 };
+        const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+        const chatInput = document.getElementById('chatInput'), chatList = document.getElementById('chat-list');
+        
+        let players = {}, targetPlayers = {}, foods = [], firedOrbs = [], myId = null, isStarted = false;
+        let camX = 1500, camY = 1500, inX = 0, inY = 0, zoom = 1.0;
 
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
         document.getElementById('startBtn').onclick = () => {
-            socket.emit('join', document.getElementById('nickInput').value.trim() || "익명");
+            const nick = document.getElementById('nickInput').value.trim() || "익명";
+            socket.emit('join', nick);
             document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('chat-box').style.display = 'block';
             isStarted = true;
         };
 
-        socket.on('connect', () => { myId = socket.id; });
-        socket.on('initFood', d => foods = d);
-        socket.on('updateFood', d => foods = d);
-        socket.on('updatePlayers', d => players = d);
-        socket.on('enemyShoot', d => { d.trail = []; firedOrbs.push(d); });
-        socket.on('updateLeaderboard', list => {
-            document.getElementById('leaderList').innerHTML = list.map((p, i) => 
-                `<div class="entry"><span>${i+1}. ${p.nickname}</span><b>${p.score}</b></div>`).join('');
-        });
-
-        window.onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; };
-        window.onmousedown = () => {
-            const me = players[myId];
-            if (!isStarted || !me || me.score <= 1) return;
-            const angle = Math.atan2(mouse.y - canvas.height/2, mouse.x - canvas.width/2);
-            socket.emit('shoot', { x: me.x, y: me.y, vx: Math.cos(angle)*16, vy: Math.sin(angle)*16 });
+        chatInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                if (chatInput.value.trim()) socket.emit('sendChat', chatInput.value);
+                chatInput.value = ''; chatInput.blur();
+            }
+            e.stopPropagation();
         };
 
-        function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (isStarted && players[myId]) {
-                const me = players[myId];
-                const dx = mouse.x - canvas.width/2, dy = mouse.y - canvas.height/2, dist = Math.hypot(dx, dy);
-                if (dist > 5) {
-                    me.x = Math.max(0, Math.min(WORLD_SIZE, me.x + (dx/dist)*5.5));
-                    me.y = Math.max(0, Math.min(WORLD_SIZE, me.y + (dy/dist)*5.5));
-                    socket.emit('move', { x: me.x, y: me.y });
+        socket.on('receiveChat', d => {
+            const m = document.createElement('div'); m.className = 'msg';
+            m.innerHTML = `<b style="color:${d.color}">${d.nick}:</b> ${d.text}`;
+            chatList.appendChild(m);
+            if(chatList.children.length > 5) chatList.removeChild(chatList.firstChild);
+            setTimeout(() => m.remove(), 6000);
+        });
+
+        socket.on('gameState', d => {
+            targetPlayers = d.players;
+            if (myId && targetPlayers[myId]) {
+                if (players[myId]) {
+                    players[myId].score = targetPlayers[myId].score;
+                    players[myId].radius = targetPlayers[myId].radius;
                 }
-                camX += (me.x - camX)*0.1; camY += (me.y - camY)*0.1;
+                document.getElementById('my-rank').innerText = `🏆 Rank: ${d.myRank}/${d.totalPlayers} | Score: ${Math.floor(targetPlayers[myId].score)}`;
+            }
+            document.getElementById('leaderList').innerHTML = '<b style="font-size:18px">TOP 5</b>' + d.leaderboard.map((p,i)=>`<div style="font-size:14px; margin-top:3px;">${i+1}. ${p.nickname} (${p.score})</div>`).join('');
+        });
+
+        socket.on('initFood', d => foods = d);
+        socket.on('updateFood', d => foods = d);
+        socket.on('enemyShoot', d => firedOrbs.push(d));
+        socket.on('connect', () => myId = socket.id);
+        socket.on('gameOver', () => { alert("게임 오버!"); location.reload(); });
+
+        window.onmousemove = e => { if(document.activeElement !== chatInput) { inX = e.clientX - canvas.width/2; inY = e.clientY - canvas.height/2; }};
+        window.onmousedown = e => { if(e.target !== chatInput) shoot(); };
+
+        function shoot() {
+            if(!isStarted || !players[myId]) return;
+            const a = Math.atan2(inY, inX);
+            socket.emit('shoot', { x: players[myId].x, y: players[myId].y, vx: Math.cos(a)*15, vy: Math.sin(a)*15 });
+        }
+
+        function loop() {
+            ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+            if (isStarted && targetPlayers[myId]) {
+                if (!players[myId]) players[myId] = {...targetPlayers[myId]};
+                const me = players[myId];
+                const d = Math.hypot(inX, inY);
+                if (d > 10) {
+                    me.x = Math.max(0, Math.min(3000, me.x + (inX/d)*6));
+                    me.y = Math.max(0, Math.min(3000, me.y + (inY/d)*6));
+                    socket.emit('move', {x: me.x, y: me.y});
+                }
+                camX += (me.x - camX) * 0.15; camY += (me.y - camY) * 0.15;
+
+                let targetZoom = 25 / (me.radius * 0.7 + 7);
+                targetZoom = Math.max(0.3, Math.min(1.0, targetZoom));
+                zoom += (targetZoom - zoom) * 0.05;
             }
 
-            ctx.save();
-            ctx.translate(canvas.width/2 - camX, canvas.height/2 - camY);
-
+            ctx.save(); 
+            ctx.translate(canvas.width/2, canvas.height/2);
+            ctx.scale(zoom, zoom);
+            ctx.translate(-camX, -camY);
+            
             // 격자
-            ctx.strokeStyle = "#ddd"; ctx.lineWidth = 2; ctx.beginPath();
-            for (let x=0; x<=WORLD_SIZE; x+=60) { ctx.moveTo(x,0); ctx.lineTo(x,WORLD_SIZE); }
-            for (let y=0; y<=WORLD_SIZE; y+=60) { ctx.moveTo(0,y); ctx.lineTo(WORLD_SIZE,y); }
+            ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1/zoom; ctx.beginPath();
+            for(let i=0; i<=3000; i+=100) { ctx.moveTo(i,0); ctx.lineTo(i,3000); ctx.moveTo(0,i); ctx.lineTo(3000,i); }
             ctx.stroke();
 
             // 먹이
             foods.forEach(f => {
-                ctx.fillStyle = f.color; ctx.strokeStyle = "#333"; ctx.lineWidth = 2;
+                ctx.fillStyle = f.color; ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.arc(f.x, f.y, f.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
             });
 
-            // 탄환
+            // 플레이어 및 무제한 위성
+            for (let id in targetPlayers) {
+                if (!players[id]) players[id] = {...targetPlayers[id]};
+                const p = players[id]; const target = targetPlayers[id];
+
+                if (id !== myId) {
+                    p.x += (target.x - p.x) * 0.3; p.y += (target.y - p.y) * 0.3;
+                    p.score = target.score; p.radius = target.radius;
+                }
+
+                // 무제한 위성 렌더링
+                const satCount = Math.floor(p.score); 
+                const time = Date.now() / 800;
+                for(let j=0; j < satCount; j++) {
+                    const angle = time + (j * Math.PI * 2 / satCount);
+                    // 위성이 많아질수록 바깥쪽으로 층을 쌓음
+                    const orbitR = p.radius + 25 + (j * 0.05); 
+                    ctx.fillStyle = p.color; ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(p.x + orbitR * Math.cos(angle), p.y + orbitR * Math.sin(angle), 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                }
+
+                // 본체
+                ctx.fillStyle = p.color; ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.font = `bold ${14/zoom}px Jua`;
+                ctx.fillText(p.nickname, p.x, p.y - p.radius - (12/zoom));
+            }
+
+            // 발사된 탄환
             firedOrbs.forEach((o, i) => {
                 o.x += o.vx; o.y += o.vy;
-                o.trail.push({x: o.x, y: o.y}); if(o.trail.length > 10) o.trail.shift();
-                ctx.beginPath(); ctx.strokeStyle = o.color; ctx.lineWidth = 5;
-                o.trail.forEach((p, idx) => { if(idx==0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
-                ctx.stroke();
-                ctx.fillStyle = o.color; ctx.strokeStyle = "#333"; ctx.lineWidth = 3;
-                ctx.beginPath(); ctx.arc(o.x, o.y, 11, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                
-                if (isStarted && myId && o.ownerId === myId) {
-                    for (let id in players) {
-                        if (id !== myId && Math.hypot(o.x - players[id].x, o.y - players[id].y) < players[id].radius + 8) {
+                ctx.fillStyle = o.color; ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(o.x, o.y, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                if (myId && o.ownerId === myId) {
+                    for (let id in targetPlayers) {
+                        if (id !== myId && Math.hypot(o.x - targetPlayers[id].x, o.y - targetPlayers[id].y) < targetPlayers[id].radius + 10) {
                             socket.emit('hit', id); firedOrbs.splice(i, 1);
                         }
                     }
                 }
-                if(o.x<0 || o.x>WORLD_SIZE || o.y<0 || o.y>WORLD_SIZE) firedOrbs.splice(i, 1);
+                if(o.x<0||o.x>3000||o.y<0||o.y>3000) firedOrbs.splice(i,1);
             });
 
-            // 플레이어 (서버 데이터 p.radius, p.score로 직접 그림)
-            for (let id in players) {
-                const p = players[id];
-                ctx.fillStyle = p.color; ctx.strokeStyle = "#333"; ctx.lineWidth = 5;
-                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                
-                ctx.fillStyle = "#333"; ctx.textAlign = "center";
-                ctx.font = "bold 20px Jua"; ctx.fillText(p.nickname, p.x, p.y - (p.radius + 25));
-                ctx.font = "18px Jua"; ctx.fillText(`${p.score}`, p.x, p.y + (p.radius + 25));
-
-                for(let j=0; j<p.score; j++) {
-                    const angle = (Date.now()/600) + (j*Math.PI*2/p.score);
-                    const d = p.radius + 38;
-                    ctx.beginPath(); ctx.arc(p.x + d*Math.cos(angle), p.y + d*Math.sin(angle), 7, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                }
-            }
             ctx.restore();
-            requestAnimationFrame(animate);
+            requestAnimationFrame(loop);
         }
-        animate();
+        loop();
         window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
     </script>
 </body>
