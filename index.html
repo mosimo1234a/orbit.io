@@ -3,215 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Orbit.io - Chat Fixed</title>
+    <title>Orbit.io PRO Final</title>
     <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
     <style>
-        :root { --bg-color: #fdfdfd; --border-color: #333; --panel-bg: rgba(255, 255, 255, 0.9); }
-        body { margin: 0; overflow: hidden; background: var(--bg-color); font-family: 'Jua', sans-serif; touch-action: none; }
-        
-        #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
-        
-        /* 채팅창 레이아웃: 15개 누적용 */
-        #chat-box { position: absolute; top: 10px; left: 10px; width: 220px; pointer-events: auto; }
-        #chat-list { 
-            height: 200px; 
-            overflow-y: hidden; 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: flex-end; 
-            margin-bottom: 5px; 
-        }
-        .msg { 
-            background: var(--panel-bg); border: 2.5px solid var(--border-color); 
-            padding: 5px 12px; border-radius: 12px; margin-top: 3px; 
-            font-size: 13px; color: #333; box-shadow: 2px 2px 0 rgba(0,0,0,0.05);
-            animation: pop 0.2s ease-out;
-        }
-        @keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
-        
-        #chatInput { 
-            width: 100%; border: 3px solid var(--border-color); padding: 10px; 
-            border-radius: 12px; font-size: 14px; box-sizing: border-box; background: #fff;
-            outline: none; font-family: 'Jua';
-        }
-
-        #leaderboard { position: absolute; top: 10px; right: 10px; background: var(--panel-bg); border: 3px solid var(--border-color); padding: 10px; border-radius: 12px; width: 150px; font-size: 13px; }
-        #my-rank { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); background: var(--border-color); color: #fff; padding: 6px 18px; border-radius: 20px; font-size: 14px; }
-        #mobile-shoot { position: fixed; bottom: 20px; right: 20px; width: 80px; height: 80px; background: #ff8e8e; border: 4px solid var(--border-color); border-radius: 50%; color: white; font-size: 18px; z-index: 20; display: none; justify-content: center; align-items: center; box-shadow: 0 5px 0 var(--border-color); }
-
-        #start-screen { position: fixed; inset: 0; background: var(--bg-color); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
-        input, button { padding: 12px 20px; font-size: 18px; border: 3px solid var(--border-color); border-radius: 15px; font-family: 'Jua'; margin-bottom: 10px; }
-        button { background: #ffcc00; cursor: pointer; border-bottom-width: 6px; }
-
-        @media (min-width: 768px) {
-            #chat-box { width: 300px; top: auto; bottom: 20px; left: auto; right: 20px; }
-            #my-rank { bottom: 25px; left: 25px; transform: none; }
-        }
+        :root { --border: #333; --panel: rgba(255, 255, 255, 0.95); }
+        body { margin: 0; overflow: hidden; background: #fdfdfd; font-family: 'Jua', sans-serif; touch-action: none; -webkit-user-select: none; }
+        #start-screen { position: fixed; inset: 0; background: #fdfdfd; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        #nickInput { padding: 15px; font-size: 20px; border: 3px solid #333; border-radius: 15px; text-align: center; width: 250px; outline: none; margin-bottom: 20px; }
+        button { padding: 12px 30px; font-size: 18px; border: 3px solid #333; border-radius: 15px; font-family: 'Jua'; cursor: pointer; border-bottom-width: 6px; }
+        #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; display: none; }
+        #leaderboard { position: absolute; top: 20px; right: 20px; background: var(--panel); border: 3px solid var(--border); padding: 12px; border-radius: 15px; width: 170px; }
+        #my-stats { position: absolute; bottom: 20px; left: 20px; background: var(--border); color: #fff; padding: 8px 20px; border-radius: 30px; font-size: 16px; }
+        #chat-box { position: absolute; bottom: 180px; right: 20px; width: 220px; pointer-events: auto; }
+        #chat-list { height: 100px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; margin-bottom: 5px; }
+        .msg { background: rgba(255,255,255,0.8); border: 2px solid var(--border); padding: 3px 8px; border-radius: 8px; margin-top: 3px; font-size: 13px; width: fit-content; }
+        #chatInput { width: 100%; padding: 10px; border: 3px solid var(--border); border-radius: 10px; font-family: 'Jua'; box-sizing: border-box; outline: none; }
     </style>
 </head>
 <body>
     <div id="start-screen">
-        <h1>ORBIT.IO</h1>
+        <h1 style="font-size: 60px; margin: 0 0 30px 0;">ORBIT.IO</h1>
         <input type="text" id="nickInput" placeholder="NICKNAME" maxlength="10">
-        <button id="startBtn">START</button>
+        <div style="display: flex; gap: 15px;"><button style="background:#ffd93d;" onclick="joinGame('ffa')">개인전</button><button style="background:#6c5ce7; color:white;" onclick="joinGame('team')">팀전</button></div>
     </div>
-
     <div id="ui">
-        <div id="leaderboard"><div id="leaderList"></div></div>
-        <div id="my-rank">Rank: - / Score: 0</div>
-        <div id="chat-box" style="display:none;">
-            <div id="chat-list"></div>
-            <input type="text" id="chatInput" placeholder="메시지 입력 후 엔터">
-        </div>
+        <div id="leaderboard"><div id="leader-list"></div></div>
+        <div id="my-stats">Rank: - / - | Score: 0</div>
+        <div id="chat-box"><div id="chat-list"></div><input type="text" id="chatInput" placeholder="Enter to chat"></div>
     </div>
-    
-    <div id="mobile-shoot">FIRE!</div>
     <canvas id="gameCanvas"></canvas>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
-        const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
-        const chatInput = document.getElementById('chatInput'), chatList = document.getElementById('chat-list');
-        const mobileShoot = document.getElementById('mobile-shoot');
-        
-        let players = {}, targetPlayers = {}, foods = [], firedOrbs = [], myId = null, isStarted = false;
-        let camX = 1500, camY = 1500, inX = 0, inY = 0, zoom = 1.0;
+        const socket = io(), canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+        let myId, isStarted = false, players = {}, targetPlayers = {}, foods = [], bullets = [];
+        let camX = 1500, camY = 1500, zoom = 1, inputDir = { x: 0, y: 0 };
+        let joystick = { active: false, startX: 0, startY: 0, currX: 0, currY: 0, id: null };
 
-        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+        window.onresize();
 
-        document.getElementById('startBtn').onclick = () => {
-            socket.emit('join', document.getElementById('nickInput').value.trim() || "Guest");
+        function joinGame(mode) {
+            socket.emit('join', { nickname: document.getElementById('nickInput').value, mode });
             document.getElementById('start-screen').style.display = 'none';
-            document.getElementById('chat-box').style.display = 'block';
-            if(window.innerWidth < 768) mobileShoot.style.display = 'flex';
+            document.getElementById('ui').style.display = 'block';
             isStarted = true;
+        }
+
+        // PC 이동 (마우스 방향)
+        window.onmousemove = (e) => {
+            if (!isStarted || joystick.active) return;
+            const dx = e.clientX - canvas.width / 2, dy = e.clientY - canvas.height / 2, d = Math.hypot(dx, dy);
+            inputDir = d > 20 ? { x: dx / d, y: dy / d } : { x: 0, y: 0 };
         };
 
-        // 채팅 기능 보강 (엔터키 이벤트)
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const msg = chatInput.value.trim();
-                if (msg) {
-                    socket.emit('chat', msg); // 서버로 전송
-                    chatInput.value = ''; // 입력창 비우기
-                }
-                chatInput.blur(); // 포커스 해제
+        // PC 사격 (마우스 클릭)
+        window.onmousedown = (e) => { if (isStarted && e.target === canvas) shoot(e.clientX - canvas.width/2, e.clientY - canvas.height/2); };
+
+        // 모바일 조작
+        canvas.addEventListener('touchstart', (e) => {
+            if (!isStarted) return;
+            for (let t of e.changedTouches) {
+                if (t.clientX < canvas.width / 2) {
+                    joystick.active = true; joystick.startX = joystick.currX = t.clientX; joystick.startY = joystick.currY = t.clientY; joystick.id = t.identifier;
+                } else { shoot(t.clientX - canvas.width/2, t.clientY - canvas.height/2); }
             }
-        });
+        }, { passive: false });
 
-        // 서버로부터 채팅 받기
-        socket.on('chat', (data) => {
-            const m = document.createElement('div');
-            m.className = 'msg';
-            m.innerHTML = `<b>${data.nick}:</b> ${data.msg}`;
-            chatList.appendChild(m);
-            
-            // 15개 누적 유지
-            while (chatList.children.length > 15) {
-                chatList.removeChild(chatList.firstChild);
+        canvas.addEventListener('touchmove', (e) => {
+            if (!isStarted) return; e.preventDefault();
+            for (let t of e.touches) if (joystick.active && t.identifier === joystick.id) {
+                joystick.currX = t.clientX; joystick.currY = t.clientY;
+                const dx = joystick.currX - joystick.startX, dy = joystick.currY - joystick.startY, d = Math.hypot(dx, dy) || 1;
+                inputDir = { x: dx/d, y: dy/d };
             }
-        });
+        }, { passive: false });
 
-        function handleInput(x, y) {
-            if(document.activeElement === chatInput) return;
-            inX = x - canvas.width/2; inY = y - canvas.height/2;
-        }
+        canvas.addEventListener('touchend', (e) => { for (let t of e.changedTouches) if (joystick.active && t.identifier === joystick.id) { joystick.active = false; inputDir = { x: 0, y: 0 }; } });
 
-        window.addEventListener('mousemove', e => handleInput(e.clientX, e.clientY));
-        window.addEventListener('touchmove', e => {
-            if (isStarted && document.activeElement !== chatInput) e.preventDefault();
-            handleInput(e.touches[0].clientX, e.touches[0].clientY);
-        }, {passive: false});
-
-        function shoot() {
-            if(!isStarted || !players[myId]) return;
-            const a = Math.atan2(inY, inX);
-            socket.emit('shoot', { x: players[myId].x, y: players[myId].y, vx: Math.cos(a)*15, vy: Math.sin(a)*15 });
-        }
-
-        window.onmousedown = e => { if(isStarted && e.target === canvas) shoot(); };
-        mobileShoot.ontouchstart = e => { e.preventDefault(); shoot(); };
+        function shoot(vx, vy) { const d = Math.hypot(vx, vy); if (d > 0) socket.emit('shoot', { vx: (vx/d)*40, vy: (vy/d)*40 }); }
 
         socket.on('gameState', d => {
-            targetPlayers = d.players;
-            if (myId && targetPlayers[myId]) {
-                document.getElementById('my-rank').innerText = `🏆 Rank: ${d.myRank}/${d.totalPlayers} | Score: ${Math.floor(targetPlayers[myId].score)}`;
-            }
-            document.getElementById('leaderList').innerHTML = '<b style="border-bottom:2px solid #333; display:block; margin-bottom:5px;">RANKING</b>' + 
-                d.leaderboard.map((p,i)=>`<div style="color:${p.color}">${i+1}. ${p.nickname} (${Math.floor(p.score)})</div>`).join('');
+            targetPlayers = d.players; bullets = d.bullets; myId = socket.id;
+            document.getElementById('leader-list').innerHTML = d.leaderboard.map((p,i)=>`<div style="color:${p.color}; display:flex; justify-content:space-between;"><span>${i+1}. ${p.nickname}</span><b>${p.score}</b></div>`).join('');
+            if(targetPlayers[myId]) document.getElementById('my-stats').innerText=`Rank: ${d.myRank}/${d.totalPlayers} | Score: ${Math.floor(targetPlayers[myId].score)}`;
         });
+        socket.on('initFood', d => foods = d); socket.on('updateFood', d => foods = d);
 
-        socket.on('initFood', d => foods = d);
-        socket.on('updateFood', d => foods = d);
-        socket.on('enemyShoot', d => firedOrbs.push(d));
-        socket.on('connect', () => myId = socket.id);
-
-        function drawCircle(x, y, r, color, sW = 3) {
-            ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle = '#333'; ctx.lineWidth = sW; ctx.stroke();
-        }
+        function drawCircle(x,y,r,c,b=true){ ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); if(b){ ctx.strokeStyle='#333'; ctx.lineWidth=2; ctx.stroke(); } }
 
         function loop() {
             ctx.fillStyle = '#fdfdfd'; ctx.fillRect(0,0,canvas.width,canvas.height);
-            
-            // 배경 그리드
-            ctx.strokeStyle = "#eee"; ctx.lineWidth = 1; ctx.beginPath();
-            let gS = 50 * zoom;
-            let oX = (canvas.width/2 - camX*zoom) % gS;
-            let oY = (canvas.height/2 - camY*zoom) % gS;
-            for(let x=oX; x<canvas.width; x+=gS) { ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); }
-            for(let y=oY; y<canvas.height; y+=gS) { ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); }
-            ctx.stroke();
-
-            if (isStarted && targetPlayers[myId]) {
-                if (!players[myId]) players[myId] = {...targetPlayers[myId]};
-                const me = players[myId];
-                const d = Math.hypot(inX, inY);
-                if (d > 10) {
-                    me.x = Math.max(0, Math.min(3000, me.x + (inX/d)*6));
-                    me.y = Math.max(0, Math.min(3000, me.y + (inY/d)*6));
-                    socket.emit('move', {x: me.x, y: me.y});
-                }
-                me.radius = targetPlayers[myId].radius;
-                me.score = targetPlayers[myId].score;
-
-                camX += (me.x - camX) * 0.15; camY += (me.y - camY) * 0.15;
-                let tZ = 25 / (me.radius * 0.7 + 7);
-                tZ = Math.max(window.innerWidth < 768 ? 0.45 : 0.3, Math.min(1.0, tZ));
-                zoom += (tZ - zoom) * 0.05;
-            }
-
-            ctx.save(); 
-            ctx.translate(canvas.width/2, canvas.height/2); ctx.scale(zoom, zoom); ctx.translate(-camX, -camY);
-            
-            foods.forEach(f => drawCircle(f.x, f.y, f.radius, f.color, 1.5));
-
+            ctx.save(); ctx.translate(canvas.width/2, canvas.height/2); ctx.scale(zoom, zoom); ctx.translate(-camX, -camY);
+            foods.forEach(f => drawCircle(f.x, f.y, f.radius, f.color));
+            bullets.forEach(b => { b.x += b.vx*0.4; b.y += b.vy*0.4; drawCircle(b.x, b.y, b.radius, b.color); });
             for (let id in targetPlayers) {
-                const p = players[id] || targetPlayers[id];
-                p.radius = targetPlayers[id].radius;
-                p.score = targetPlayers[id].score;
-                if (id !== myId) {
-                    p.x += (targetPlayers[id].x - p.x) * 0.3;
-                    p.y += (targetPlayers[id].y - p.y) * 0.3;
+                const p = targetPlayers[id];
+                if (!players[id]) players[id] = { ...p };
+                if (id !== myId) { players[id].x += (p.x - players[id].x) * 0.15; players[id].y += (p.y - players[id].y) * 0.15; players[id].radius += (p.radius - players[id].radius) * 0.1; }
+                else {
+                    if(Math.hypot(inputDir.x, inputDir.y) > 0) {
+                        players[id].x = Math.max(0, Math.min(3000, players[id].x + inputDir.x * 6));
+                        players[id].y = Math.max(0, Math.min(3000, players[id].y + inputDir.y * 6));
+                        socket.emit('move', { x: players[id].x, y: players[id].y });
+                    }
+                    players[id].radius = p.radius; camX += (players[id].x - camX) * 0.1; camY += (players[id].y - camY) * 0.1; zoom += (25/(p.radius*0.8+10) - zoom) * 0.05;
                 }
-                
-                const sC = Math.floor(p.score);
-                for(let j=0; j < sC; j++) {
-                    const ang = (Date.now() / 800) + (j * Math.PI * 2 / Math.max(1, sC));
-                    const oR = p.radius + 25 + (j * 0.5);
-                    drawCircle(p.x + oR * Math.cos(ang), p.y + oR * Math.sin(ang), 6, p.color, 2);
-                }
-                drawCircle(p.x, p.y, p.radius, p.color, 4);
-                ctx.fillStyle = "#333"; ctx.textAlign = "center"; ctx.font = "bold 16px Jua";
-                ctx.fillText(targetPlayers[id].nickname, p.x, p.y + p.radius + 30);
+                const dp = players[id], s = Math.floor(p.score);
+                for(let i=0; i<s; i++){ const a = (Date.now()/800) + (i*6.28/Math.max(1,s)); drawCircle(dp.x+Math.cos(a)*(p.radius+20), dp.y+Math.sin(a)*(p.radius+20), 6, p.color); }
+                drawCircle(dp.x, dp.y, dp.radius, p.color, true);
+                ctx.fillStyle="#333"; ctx.textAlign="center"; ctx.font="bold 14px Jua"; ctx.fillText(p.nickname, dp.x, dp.y+dp.radius+35);
             }
-            firedOrbs.forEach(o => drawCircle(o.x += o.vx, o.y += o.vy, 10, o.color, 2));
             ctx.restore();
+            if(joystick.active) { ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, 50, 0, 6.28); ctx.stroke(); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.arc(joystick.currX, joystick.currY, 25, 0, 6.28); ctx.fill(); }
+            const ms = 130, mx = canvas.width - ms - 20, my = canvas.height - ms - 20;
+            ctx.fillStyle = 'rgba(0,0,0,0.05)'; ctx.beginPath(); ctx.roundRect(mx, my, ms, ms, 10); ctx.fill();
+            for(let id in targetPlayers) { const p = targetPlayers[id]; ctx.fillStyle = (id === myId) ? '#000' : p.color; ctx.beginPath(); ctx.arc(mx + (p.x/3000)*ms, my + (p.y/3000)*ms, 3, 0, 6.28); ctx.fill(); }
             requestAnimationFrame(loop);
         }
         loop();
-        window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+        const chatInput = document.getElementById('chatInput');
+        chatInput.onkeydown = (e) => { if(e.key==='Enter' && chatInput.value.trim()){ socket.emit('chat', chatInput.value); chatInput.value=''; chatInput.blur(); } };
+        socket.on('chat', d => { const l = document.getElementById('chat-list'), div = document.createElement('div'); div.className='msg'; div.innerHTML=`<b>${d.nick}:</b> ${d.msg}`; l.appendChild(div); if(l.children.length>5) l.removeChild(l.firstChild); });
     </script>
 </body>
 </html>
